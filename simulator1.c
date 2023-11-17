@@ -16,7 +16,7 @@ int main(){
         printf("SIMULATOR - CPU 0: RR [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n" ,process1->iPID ,process1->iPriority, process1->iBurstTime, process1->iRemainingBurstTime);
     }
     response = getDifferenceInMilliSeconds(process1->oTimeCreated, process1->oFirstTimeRunning);
-    turnaro = getDifferenceInMilliSeconds(process1->oFirstTimeRunning, process1->oLastTimeRunning);
+    turnaro = getDifferenceInMilliSeconds(process1->oTimeCreated, process1->oLastTimeRunning);
     printf("TERMINATOR - TERMINATED: [PID = %d, ResponseTime = %ld, TurnAroundTime = %ld]\n",process1->iPID, response, turnaro);
     destroyProcess(process1);
 
