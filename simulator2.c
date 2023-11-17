@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "coursework.h"
 #include "linkedlist.h"
 
@@ -8,6 +9,7 @@ int main(){
     int readyQ_length = 0;
     int terminatedQ_length = 0;
     long int total_response, total_turnaround;
+    double mean_r, mean_tu;
     bool bsim = false;
     Process *current_process;
     LinkedList oReadyQueue = LINKED_LIST_INITIALIZER;
@@ -66,10 +68,10 @@ int main(){
         printf("TERMINATION DAEMON - CLEARED: [#iTerminated = %d, PID = %d, Priority = %d]\n", terminated_count, current_process->iPID, current_process->iPriority);
         destroyProcess(current_process);
     }
+    mean_r = (double)total_response;
+    mean_tu = (double)total_turnaround;
     printf("TERMINATION DAEMON: Finished\n");
-    printf("TERMINATION DAEMON: [Average Response Time = %ld, Average Turn Around Time = %ld]\n", total_response/NUMBER_OF_PROCESSES, total_turnaround/NUMBER_OF_PROCESSES);
-    free(oReadyQueue);
-    free(oTerminatedQueue);
+    printf("TERMINATION DAEMON: [Average Response Time = %lf, Average Turn Around Time = %lf]\n", (mean_r/NUMBER_OF_PROCESSES), (mean_tu/NUMBER_OF_PROCESSES));
     
 
 
