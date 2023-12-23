@@ -74,3 +74,4 @@ int main(){
     printf("TERMINATION DAEMON: [Average Response Time = %lf, Average Turn Around Time = %lf]\n", (mean_r/NUMBER_OF_PROCESSES), (mean_tu/NUMBER_OF_PROCESSES));
     
 }
+
