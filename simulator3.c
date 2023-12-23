@@ -15,7 +15,7 @@ double response_times = 0, turnaround_times = 0;
 int readyQ_length = 0;
 int terminatedQ_length = 0;
 pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock;
-sem_t generator_sem;
+sem_t generator_sem, simulator_sem, terminator_sem;
 
 // Utility Functions
 
@@ -64,6 +64,11 @@ void *generator() {
         // QUEUE - ADDED
         safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
 
+        if(process_count==MAX_CONCURRENT_PROCESSES)
+        {
+            sem_post(simulator_sem);
+        }
+
         // GENERATOR - ADMITTED
         safe_printf("GENERATOR - ADMITTED: [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n", current_process->iPID,current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
         pthread_mutex_unlock(&readyQ_lock);
@@ -74,6 +79,8 @@ void *generator() {
 //SIMULATE PROCESSES AND ADD THEM TO CORRESPONDING QUEUE
 void *simulator() {
     while(readyQ_length != 0){
+        sem_wait(simulator_sem);
+
         pthread_mutex_lock(&readyQ_lock);
         Process *current_process = getHead(oReadyQueue)->pData;
         removeFirst(&oReadyQueue);
@@ -101,6 +108,7 @@ void *simulator() {
             terminatedQ_length++;
             safe_printf("QUEUE - ADDED: [Queue = TERMINATED, Size = %d, PID = %d, Priority = %d]\n", terminatedQ_length, current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&terminatedQ_lock);
+            sem_post(terminator_sem);
         }
     }
 
@@ -112,6 +120,7 @@ void *terminator() {
     int no_terminated = 0;
 
     while(no_terminated != NUMBER_OF_PROCESSES){
+        sem_wait(&terminator_sem);
 
         pthread_mutex_lock(&terminatedQ_lock); // Lock terminated Queue
         Process *current_process = removeFirst(&oTerminatedQueue);
@@ -148,8 +157,10 @@ int main() {
     pthread_create(&thread_simulator, NULL, simulator, NULL);
     pthread_create(&thread_terminator, NULL, terminator, NULL);
 
-    // Create semaphore
+    // Create semaphores
     sem_init(&generator_sem, 0, MAX_CONCURRENT_PROCESSES);
+    sem_init(&simulator_sem,0,0);
+    sem_init(&terminator_sem, 0, 0);
 
     // Wait for the threads to complete
     pthread_join(thread_generator, NULL);
@@ -161,6 +172,8 @@ int main() {
     pthread_mutex_destroy(&terminatedQ_lock);
 
     sem_destroy(&generator_sem);
+    sem_destroy(&simulator_sem);
+    sem_destroy(&terminator_sem);
     
     return 0;
 }
