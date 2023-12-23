@@ -128,9 +128,11 @@ void *terminator() {
 
         sem_post(&generator_sem); // Signal that a new process can be created
     }
+    double mean_response = response_times/NUMBER_OF_PROCESSES;
+    double mean_turnaround = turnaround_times/NUMBER_OF_PROCESSES;
 
-    safe_printf("TERMINATION DAEMON: Finished\n");
-    safe_printf("TERMINATION DAEMON: [Average Response Time = %lf, Average Turn Around Time = %lf]\n", (response_times/NUMBER_OF_PROCESSES), (turnaround_times/NUMBER_OF_PROCESSES));
+    printf("TERMINATION DAEMON: Finished\n");
+    printf("TERMINATION DAEMON: [Average Response Time = %lf, Average Turn Around Time = %lf]\n", mean_response, mean_turnaround);
 }
 
 
@@ -159,5 +161,6 @@ int main() {
     pthread_mutex_destroy(&terminatedQ_lock);
 
     sem_destroy(&generator_sem);
+    
     return 0;
 }
