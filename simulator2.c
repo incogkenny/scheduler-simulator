@@ -8,7 +8,7 @@ int main(){
     int terminated_count = 0;
     int readyQ_length = 0;
     int terminatedQ_length = 0;
-    long int total_response, total_turnaround;
+    long int total_response = 0, total_turnaround = 0;
     double mean_r, mean_tu;
     bool bsim = false;
     Process *current_process;
