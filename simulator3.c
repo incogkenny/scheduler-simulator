@@ -13,6 +13,7 @@ LinkedList oTerminatedQueue = LINKED_LIST_INITIALIZER;
 double response_times = 0, turnaround_times = 0;
 
 int readyQ_length = 0;
+int terminated_count = 0;
 int terminatedQ_length = 0;
 pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock;
 sem_t generator_sem, simulator_sem, terminator_sem;
@@ -64,9 +65,9 @@ void *generator() {
         // QUEUE - ADDED
         safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
 
-        if(process_count==MAX_CONCURRENT_PROCESSES)
+        if(process_count+1==MAX_CONCURRENT_PROCESSES)
         {
-            sem_post(simulator_sem);
+            sem_post(&simulator_sem);
         }
 
         // GENERATOR - ADMITTED
@@ -78,8 +79,8 @@ void *generator() {
 
 //SIMULATE PROCESSES AND ADD THEM TO CORRESPONDING QUEUE
 void *simulator() {
-    while(readyQ_length != 0){
-        sem_wait(simulator_sem);
+    sem_wait(&simulator_sem);
+    while(1){
 
         pthread_mutex_lock(&readyQ_lock);
         Process *current_process = getHead(oReadyQueue)->pData;
@@ -106,9 +107,14 @@ void *simulator() {
             safe_printf("SIMULATOR - CPU 0 - TERMINATED: [PID = %d, ResponseTime = %ld, TurnAroundTime = %ld]\n", current_process->iPID, getDifferenceInMilliSeconds(current_process->oTimeCreated, current_process->oFirstTimeRunning), getDifferenceInMilliSeconds(current_process->oTimeCreated, current_process->oLastTimeRunning));
             addLast(current_process, &oTerminatedQueue);
             terminatedQ_length++;
+            terminated_count++;
             safe_printf("QUEUE - ADDED: [Queue = TERMINATED, Size = %d, PID = %d, Priority = %d]\n", terminatedQ_length, current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&terminatedQ_lock);
-            sem_post(terminator_sem);
+            sem_post(&terminator_sem);
+        }
+
+        if(terminated_count == NUMBER_OF_PROCESSES){
+            break;
         }
     }
 
@@ -119,7 +125,7 @@ void *simulator() {
 void *terminator() {
     int no_terminated = 0;
 
-    while(no_terminated != NUMBER_OF_PROCESSES){
+    while(1){
         sem_wait(&terminator_sem);
 
         pthread_mutex_lock(&terminatedQ_lock); // Lock terminated Queue
@@ -136,6 +142,10 @@ void *terminator() {
 
 
         sem_post(&generator_sem); // Signal that a new process can be created
+
+        if (no_terminated >= NUMBER_OF_PROCESSES) {
+            break;
+        }
     }
     double mean_response = response_times/NUMBER_OF_PROCESSES;
     double mean_turnaround = turnaround_times/NUMBER_OF_PROCESSES;
