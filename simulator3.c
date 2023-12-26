@@ -49,12 +49,13 @@ void safe_printf(const char *format, ...) {
 
 //GENERATE PROCESSES AND ADD THEM TO QUEUE
 void *generator() {
-    for (int process_count = 0; process_count< NUMBER_OF_PROCESSES; process_count++){
+    int process_count;
+    for (process_count = 0; process_count< NUMBER_OF_PROCESSES; process_count++){
         sem_wait(&generator_sem);
         // Creates and prints current process
         Process *current_process = generateProcess(process_count);
         // GENERATOR - CREATED
-        safe_printf("GENERATOR - CREATED: [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n",current_process->iPID,current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
+        printf("GENERATOR - CREATED: [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n",current_process->iPID,current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
 
 
         // Adds process to oReadyQueue and prints that process was added to ready queue and that process is admitted
@@ -65,7 +66,7 @@ void *generator() {
         // QUEUE - ADDED
         safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
 
-        if(process_count+1==MAX_CONCURRENT_PROCESSES)
+        if(process_count==MAX_CONCURRENT_PROCESSES)
         {
             sem_post(&simulator_sem);
         }
@@ -79,8 +80,9 @@ void *generator() {
 
 //SIMULATE PROCESSES AND ADD THEM TO CORRESPONDING QUEUE
 void *simulator() {
+
     sem_wait(&simulator_sem);
-    while(1){
+    while(terminated_count<NUMBER_OF_PROCESSES){
 
         pthread_mutex_lock(&readyQ_lock);
         Process *current_process = getHead(oReadyQueue)->pData;
@@ -100,6 +102,7 @@ void *simulator() {
             safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
             safe_printf("SIMULATOR - CPU 0 - READY: [PID = %d, Priority = %d]\n", current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&readyQ_lock);
+            sem_post(&simulator_sem);
         }
 
         if(current_process->iState == TERMINATED){
@@ -112,10 +115,6 @@ void *simulator() {
             pthread_mutex_unlock(&terminatedQ_lock);
             sem_post(&terminator_sem);
         }
-
-        if(terminated_count == NUMBER_OF_PROCESSES){
-            break;
-        }
     }
 
     printf("SIMULATOR: Finished\n");
@@ -125,7 +124,7 @@ void *simulator() {
 void *terminator() {
     int no_terminated = 0;
 
-    while(1){
+    while(no_terminated!=NUMBER_OF_PROCESSES){
         sem_wait(&terminator_sem);
 
         pthread_mutex_lock(&terminatedQ_lock); // Lock terminated Queue
