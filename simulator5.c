@@ -17,7 +17,7 @@ typedef struct
 
 void *processTable[SIZE_OF_PROCESS_TABLE];
 Stack pidPool = STACK_INITILIASER;
-LinkedList oReadyQueue = LINKED_LIST_INITIALIZER;
+LinkedList oReadyQueue[NUMBER_OF_PRIORITY_LEVELS];
 LinkedList oTerminatedQueue = LINKED_LIST_INITIALIZER;
 int readyQ_length = 0;
 int terminatedQ_length = 0;
@@ -59,12 +59,13 @@ int main() {
     sem_destroy(&generator_sem);
     sem_destroy(&simulator_sem);
     sem_destroy(&terminator_sem);
-    
+
     return 0;
 }
 
 // Utility Functions
 
+//  Returns size of a Queue
 int getQueueSize(LinkedList *pList) {
     int size = 0;
     Element *current = pList->pHead; // Start at the head of the list
@@ -119,8 +120,7 @@ int peek(Stack *stk)
 
 //GENERATE PROCESSES AND ADD THEM TO QUEUE
 void* generator() {
-    int process_count;
-    for (process_count = 0; process_count < NUMBER_OF_PROCESSES; process_count++){
+    for (int process_count = 0; process_count < NUMBER_OF_PROCESSES; process_count++){
         sem_wait(&generator_sem);
         // Creates and prints current process
         Process *current_process;
@@ -141,7 +141,7 @@ void* generator() {
 
         // Adds process to oReadyQueue and prints that process was added to ready queue and that process is admitted
         pthread_mutex_lock(&readyQ_lock);
-        addLast(current_process, &oReadyQueue);
+        addLast(current_process, &oReadyQueue[current_process->iPriority]);
         readyQ_length++;
         safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
         pthread_mutex_unlock(&readyQ_lock);
@@ -161,24 +161,43 @@ void* generator() {
 //SIMULATE PROCESSES AND ADD THEM TO CORRESPONDING QUEUE
 void* simulator() {
     int terminated_count = 0;
-    
+
     while(terminated_count != NUMBER_OF_PROCESSES){
 
         sem_wait(&simulator_sem); // Make sure there is something to simulate
 
+        int queue_num = -1;
+
         pthread_mutex_lock(&readyQ_lock);
-        Process *current_process = removeFirst(&oReadyQueue);
+        for (int i = 0; i < NUMBER_OF_PRIORITY_LEVELS; i++)
+        {
+            if (getQueueSize(&oReadyQueue[i]) > 0)
+            {
+                queue_num = i;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&readyQ_lock);
+
+        pthread_mutex_lock(&readyQ_lock);
+        Process *current_process = removeFirst(&oReadyQueue[queue_num]);
         readyQ_length--;
         safe_printf("QUEUE - REMOVED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
         pthread_mutex_unlock(&readyQ_lock);
 
         // run process
-        runPreemptiveProcess(current_process, false);
-        safe_printf("SIMULATOR - CPU 0: RR [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n", current_process->iPID, current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
+        if(current_process->iPriority < NUMBER_OF_PRIORITY_LEVELS / 2) {
+            runNonPreemptiveProcess(current_process, false);
+            safe_printf("SIMULATOR - CPU 0: FCFS [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n", current_process->iPID, current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
+        }
+        else {
+            runPreemptiveProcess(current_process, false);
+            safe_printf("SIMULATOR - CPU 0: RR [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n", current_process->iPID, current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
+        }
 
         if(current_process->iState == READY){
             pthread_mutex_lock(&readyQ_lock);
-            addLast(current_process, &oReadyQueue);
+            addLast(current_process, &oReadyQueue[current_process->iPriority]);
             readyQ_length++;
             safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
             safe_printf("SIMULATOR - CPU 0 - READY: [PID = %d, Priority = %d]\n", current_process->iPID, current_process->iPriority);
