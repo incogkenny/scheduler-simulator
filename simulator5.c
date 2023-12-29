@@ -19,7 +19,6 @@ void *processTable[SIZE_OF_PROCESS_TABLE];
 Stack pidPool = STACK_INITILIASER;
 LinkedList oReadyQueue[NUMBER_OF_PRIORITY_LEVELS];
 LinkedList oTerminatedQueue = LINKED_LIST_INITIALIZER;
-int readyQ_length = 0;
 int terminatedQ_length = 0;
 pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock, pool_lock, table_lock;
 sem_t generator_sem, simulator_sem, terminator_sem;
@@ -142,8 +141,7 @@ void* generator() {
         // Adds process to oReadyQueue and prints that process was added to ready queue and that process is admitted
         pthread_mutex_lock(&readyQ_lock);
         addLast(current_process, &oReadyQueue[current_process->iPriority]);
-        readyQ_length++;
-        safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
+        safe_printf("QUEUE - ADDED: [Queue = READY %d, Size = %d, PID = %d, Priority = %d]\n", current_process->iPriority, getQueueSize(&oReadyQueue[current_process->iPriority]), current_process->iPID, current_process->iPriority);
         pthread_mutex_unlock(&readyQ_lock);
 
         pthread_mutex_lock(&pool_lock);
@@ -181,8 +179,7 @@ void* simulator() {
 
         pthread_mutex_lock(&readyQ_lock);
         Process *current_process = removeFirst(&oReadyQueue[queue_num]);
-        readyQ_length--;
-        safe_printf("QUEUE - REMOVED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
+        safe_printf("QUEUE - REMOVED: [Queue = READY %d, Size = %d, PID = %d, Priority = %d]\n",current_process->iPriority, getQueueSize(&oReadyQueue[queue_num]), current_process->iPID, current_process->iPriority);
         pthread_mutex_unlock(&readyQ_lock);
 
         // run process
@@ -198,8 +195,7 @@ void* simulator() {
         if(current_process->iState == READY){
             pthread_mutex_lock(&readyQ_lock);
             addLast(current_process, &oReadyQueue[current_process->iPriority]);
-            readyQ_length++;
-            safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
+            safe_printf("QUEUE - ADDED: [Queue = READY %d, Size = %d, PID = %d, Priority = %d]\n",current_process->iPriority, getQueueSize(&oReadyQueue[queue_num]), current_process->iPID, current_process->iPriority);
             safe_printf("SIMULATOR - CPU 0 - READY: [PID = %d, Priority = %d]\n", current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&readyQ_lock);
             sem_post(&simulator_sem);
