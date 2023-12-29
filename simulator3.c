@@ -66,10 +66,7 @@ void *generator() {
         // QUEUE - ADDED
         safe_printf("QUEUE - ADDED: [Queue = READY, Size = %d, PID = %d, Priority = %d]\n", readyQ_length, current_process->iPID, current_process->iPriority);
 
-        if(process_count==MAX_CONCURRENT_PROCESSES)
-        {
-            sem_post(&simulator_sem);
-        }
+        sem_post(&simulator_sem);
 
         // GENERATOR - ADMITTED
         safe_printf("GENERATOR - ADMITTED: [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n", current_process->iPID,current_process->iPriority, current_process->iBurstTime, current_process->iRemainingBurstTime);
@@ -81,9 +78,9 @@ void *generator() {
 //SIMULATE PROCESSES AND ADD THEM TO CORRESPONDING QUEUE
 void *simulator() {
 
-    sem_wait(&simulator_sem);
+    
     while(terminated_count<NUMBER_OF_PROCESSES){
-
+        sem_wait(&simulator_sem);
         pthread_mutex_lock(&readyQ_lock);
         Process *current_process = getHead(oReadyQueue)->pData;
         removeFirst(&oReadyQueue);
@@ -114,6 +111,7 @@ void *simulator() {
             safe_printf("QUEUE - ADDED: [Queue = TERMINATED, Size = %d, PID = %d, Priority = %d]\n", terminatedQ_length, current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&terminatedQ_lock);
             sem_post(&terminator_sem);
+            sem_post(&generator_sem);
         }
     }
 
@@ -134,7 +132,6 @@ void *terminator() {
         response_times += getDifferenceInMilliSeconds(current_process->oTimeCreated, current_process->oFirstTimeRunning);
         turnaround_times += getDifferenceInMilliSeconds(current_process->oTimeCreated, current_process->oLastTimeRunning);
         safe_printf("QUEUE - REMOVED: [Queue = TERMINATED, Size = %d, PID = %d, Priority = %d]\n", terminatedQ_length, current_process->iPID, current_process->iPriority);
-
         safe_printf("TERMINATION DAEMON - CLEARED: [#iTerminated = %d, PID = %d, Priority = %d]\n", no_terminated, current_process->iPID, current_process->iPriority);
         destroyProcess(current_process);
         pthread_mutex_unlock(&terminatedQ_lock); // Unlock terminated Queue
