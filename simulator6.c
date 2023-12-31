@@ -21,7 +21,7 @@ Stack pidPool = STACK_INITILIASER;
 LinkedList ReadyQueue[NUMBER_OF_PRIORITY_LEVELS];
 LinkedList TerminatedQueue = LINKED_LIST_INITIALIZER;
 int boosting = true;
-pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock, pool_lock, table_lock;
+pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock, pool_lock, table_lock, booster_lock;
 sem_t generator_sem, simulator_sem, terminator_sem;
 void* generator();
 void* simulator();
@@ -36,6 +36,7 @@ int main() {
     pthread_mutex_init(&terminatedQ_lock, 0);
     pthread_mutex_init(&pool_lock, 0);
     pthread_mutex_init(&table_lock, 0);
+    pthread_mutex_init(&booster_lock, 0);
 
     sem_init(&generator_sem, 0, MAX_CONCURRENT_PROCESSES);
     sem_init(&simulator_sem,0,0);
@@ -58,6 +59,7 @@ int main() {
     pthread_mutex_destroy(&terminatedQ_lock);
     pthread_mutex_destroy(&pool_lock);
     pthread_mutex_destroy(&table_lock);
+    pthread_mutex_destroy(&booster_lock);
 
     sem_destroy(&generator_sem);
     sem_destroy(&simulator_sem);
@@ -244,7 +246,9 @@ void* simulator() {
     }
 
     printf("SIMULATOR: Finished\n");
+    pthread_mutex_lock(&booster_lock);
     boosting = false;
+    pthread_mutex_unlock(&booster_lock);
 }
 
 // TERMINATE PROCESSES AND CLEAR MEMORY ASSOCIATED
@@ -292,10 +296,12 @@ void* booster() {
     safe_printf("BOOSTER DAEMON: Created\n");
 
     while(1) {
-
+        pthread_mutex_lock(&booster_lock);
         if(!boosting){
+            pthread_mutex_unlock(&booster_lock);
             break;
         }
+        pthread_mutex_unlock(&booster_lock);
         Process *current_process;
 
         pthread_mutex_lock(&readyQ_lock);

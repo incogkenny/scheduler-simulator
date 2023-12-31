@@ -20,22 +20,26 @@ void *processTable[SIZE_OF_PROCESS_TABLE];
 Stack pidPool = STACK_INITILIASER;
 LinkedList ReadyQueue[NUMBER_OF_PRIORITY_LEVELS];
 LinkedList TerminatedQueue = LINKED_LIST_INITIALIZER;
-int boosting = true;
-pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock, pool_lock, table_lock;
+LinkedList IOQueue[NUMBER_OF_IO_DEVICES];
+int boosting = true, io_sim = true;
+pthread_mutex_t print_lock, readyQ_lock, terminatedQ_lock, pool_lock, table_lock, booster_lock, io_lock;
 sem_t generator_sem, simulator_sem, terminator_sem;
 void* generator();
 void* simulator();
 void* terminator();
 void* booster();
+void* io_simulator();
 
 int main() {
-    pthread_t thread_generator, thread_simulator, thread_terminator, thread_booster;
+    pthread_t thread_generator, thread_simulator, thread_terminator, thread_booster, thread_ioSim;
     // Create mutexes and semaphores
     pthread_mutex_init(&print_lock, 0);
     pthread_mutex_init(&readyQ_lock, 0);
     pthread_mutex_init(&terminatedQ_lock, 0);
     pthread_mutex_init(&pool_lock, 0);
     pthread_mutex_init(&table_lock, 0);
+    pthread_mutex_init(&booster_lock, 0);
+    pthread_mutex_init(&io_lock, 0);
 
     sem_init(&generator_sem, 0, MAX_CONCURRENT_PROCESSES);
     sem_init(&simulator_sem,0,0);
@@ -46,18 +50,22 @@ int main() {
     pthread_create(&thread_simulator, NULL, simulator, NULL);
     pthread_create(&thread_terminator, NULL, terminator, NULL);
     pthread_create(&thread_booster, NULL, booster, NULL);
+    pthread_create(&thread_ioSim, NULL, io_simulator, NULL);
 
     // Wait for the threads to complete
     pthread_join(thread_generator, NULL);
     pthread_join(thread_simulator, NULL);
     pthread_join(thread_terminator, NULL);
     pthread_join(thread_booster, NULL);
+    pthread_join(thread_ioSim, NULL);
 
     pthread_mutex_destroy(&print_lock);
     pthread_mutex_destroy(&readyQ_lock);
     pthread_mutex_destroy(&terminatedQ_lock);
     pthread_mutex_destroy(&pool_lock);
     pthread_mutex_destroy(&table_lock);
+    pthread_mutex_destroy(&booster_lock);
+    pthread_mutex_destroy(&io_lock);
 
     sem_destroy(&generator_sem);
     sem_destroy(&simulator_sem);
@@ -136,6 +144,14 @@ char* get_process_state(int iState){
 
 //GENERATE PROCESSES AND ADD THEM TO QUEUE
 void* generator() {
+
+    pthread_mutex_lock(&io_lock);
+    for(int i = 0; i < NUMBER_OF_IO_DEVICES; i++){
+        LinkedList temp_queue = LINKED_LIST_INITIALIZER;
+        IOQueue[i] = temp_queue;
+    }
+    pthread_mutex_unlock(&io_lock);
+
     for (int process_count = 0; process_count < NUMBER_OF_PROCESSES; process_count++){
         sem_wait(&generator_sem);
         // Creates and prints current process
@@ -203,20 +219,21 @@ void* simulator() {
 
         // run process
         if(current_process->iPriority < NUMBER_OF_PRIORITY_LEVELS / 2) {
-            runNonPreemptiveProcess(current_process, false);
+            runNonPreemptiveProcess(current_process, true);
             safe_printf(
                 "SIMULATOR - CPU 0: FCFS [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n",
                 current_process->iPID, current_process->iPriority, current_process->iBurstTime,
                 current_process->iRemainingBurstTime);
         }
         else {
-            runPreemptiveProcess(current_process, false);
+            runPreemptiveProcess(current_process, true);
             safe_printf(
                 "SIMULATOR - CPU 0: RR [PID = %d, Priority = %d, InitialBurstTime = %d, RemainingBurstTime = %d]\n",
                 current_process->iPID, current_process->iPriority, current_process->iBurstTime,
                 current_process->iRemainingBurstTime);
         }
 
+        // Decide process outcome
         if(current_process->iState == READY){
             pthread_mutex_lock(&readyQ_lock);
             addLast(current_process, &ReadyQueue[current_process->iPriority]);
@@ -226,6 +243,17 @@ void* simulator() {
             safe_printf("SIMULATOR - CPU 0 - READY: [PID = %d, Priority = %d]\n", current_process->iPID, current_process->iPriority);
             pthread_mutex_unlock(&readyQ_lock);
             sem_post(&simulator_sem);
+        }
+
+        if(current_process->iState == BLOCKED){
+            safe_printf("SIMULATOR - CPU 0 - I/O BLOCKED: [PID = %d, Priority = %d, Device = %d]\n",
+                        current_process->iPID, current_process->iPriority, current_process->iDeviceID);
+            pthread_mutex_lock(&io_lock);
+            addLast(current_process, &IOQueue[current_process->iDeviceID]);
+            safe_printf("QUEUE - ADDED: [Queue = I/O %d, Size = %d, PID = %d, Priority = %d]\n",
+                        current_process->iDeviceID, getQueueSize(&IOQueue[current_process->iDeviceID]), current_process->iPID, current_process->iPriority);
+            sem_post(&simulator_sem);
+            pthread_mutex_unlock(&io_lock);
         }
 
         if(current_process->iState == TERMINATED){
@@ -244,7 +272,12 @@ void* simulator() {
     }
 
     printf("SIMULATOR: Finished\n");
+    pthread_mutex_lock(&io_lock);
+    io_sim = false;
+    pthread_mutex_unlock(&io_lock);
+    pthread_mutex_lock(&booster_lock);
     boosting = false;
+    pthread_mutex_unlock(&booster_lock);
 }
 
 // TERMINATE PROCESSES AND CLEAR MEMORY ASSOCIATED
@@ -292,10 +325,12 @@ void* booster() {
     safe_printf("BOOSTER DAEMON: Created\n");
 
     while(1) {
-
+        pthread_mutex_lock(&booster_lock);
         if(!boosting){
+            pthread_mutex_unlock(&booster_lock);
             break;
         }
+        pthread_mutex_unlock(&booster_lock);
         Process *current_process;
 
         pthread_mutex_lock(&readyQ_lock);
@@ -325,5 +360,30 @@ void* booster() {
     safe_printf("BOOSTER DAEMON: Finished\n");
     }
 
-
+void* io_simulator(){
+    while(1){
+        pthread_mutex_lock(&io_lock);
+        if(!io_sim){
+            pthread_mutex_unlock(&io_lock);
+            break;
+        }
+        Process *cP;
+        for(int i = 0; i < NUMBER_OF_IO_DEVICES; i++){
+            while(cP = removeFirst(&(IOQueue[i]))){
+                safe_printf("QUEUE - REMOVED: [Queue = I/O %d, Size = %d, PID = %d, Priority = %d]\n",
+                            i, getQueueSize(&IOQueue[i]), cP->iPID, cP->iPriority);
+                unblockProcess(cP);
+                safe_printf("I/O DAEMON - UNBLOCKED: [PID = %d, Priority = %d]\n", cP->iPID, cP->iPriority);
+                pthread_mutex_lock(&readyQ_lock);
+                addFirst(cP, &ReadyQueue[cP->iPriority]);
+                safe_printf("QUEUE - ADDED: [Queue = %s %d, Size = %d, PID = %d, Priority = %d]\n",
+                            get_process_state(cP->iState),cP->iPriority, getQueueSize(&ReadyQueue[cP->iPriority]), cP->iPID, cP->iPriority);
+                pthread_mutex_unlock(&readyQ_lock);
+            }
+        }
+        pthread_mutex_unlock(&io_lock);
+        usleep(IO_DAEMON_INTERVAL*1000);
+    }
+    safe_printf("I/O DAEMON: Finished\n");
+}
 
