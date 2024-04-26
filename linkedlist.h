@@ -1,7 +1,3 @@
-/**************************************************************************************************************************
-      DO NOT CHANGE THE CONTENTS OF THIS FILE FOR YOUR COURSEWORK. ONLY WORK WITH THE OFFICIAL VERSION
-**************************************************************************************************************************/
-
 #define LINKED_LIST_INITIALIZER {NULL, NULL}
 #define ELEMENT_INITIALIZER {NULL, NULL, NULL}
 
