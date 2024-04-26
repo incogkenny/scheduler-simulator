@@ -1,8 +1,3 @@
-/**************************************************************************************************************************
-			- DO NOT CHANGE THE CONTENTS OF THIS FILE FOR YOUR COURSEWORK (APART FROM THE VALUES FOR THE CONSTANTS)
-			- ONLY WORK WITH THE OFFICIAL VERSION
-**************************************************************************************************************************/
-
 #include <sys/time.h>
 
 typedef enum {false, true} bool;
